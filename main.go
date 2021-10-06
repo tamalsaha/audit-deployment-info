@@ -4,6 +4,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
+	"k8s.io/client-go/tools/cache"
 	"log"
 	"math/big"
 	"net"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/klog/v2"
 	meta_util "kmodules.xyz/client-go/meta"
 	"kmodules.xyz/client-go/tools/clusterid"
+	"go.bytebuilders.dev/license-verifier/info"
 	"kmodules.xyz/resource-metrics/api"
 )
 
@@ -42,7 +44,7 @@ func main() {
 	factory := informers.NewSharedInformerFactory(kc, 0)
 	nodeInformer := factory.Core().V1().Nodes().Informer()
 	nodeLister := factory.Core().V1().Nodes().Lister()
-	nodeInformer.AddEventHandlerWithResyncPeriod(nil, 0) // c.Auditor.ForGVK(api.SchemeGroupVersion.WithKind(api.ResourceKindPostgres)))
+	nodeInformer.AddEventHandlerWithResyncPeriod(&ResourceEventPublisher{}, 0) // c.Auditor.ForGVK(api.SchemeGroupVersion.WithKind(api.ResourceKindPostgres)))
 
 	stopCh := genericapiserver.SetupSignalHandler()
 	factory.Start(stopCh)
@@ -67,7 +69,12 @@ func main() {
 
 func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.NodeLister) (*SiteInfo, error) {
 	var si SiteInfo
-	si.Version = Version{
+	si.ProductInfo.LicenseID = "" // fix this
+	si.ProductInfo.ProductOwnerName = info.ProductOwnerName
+	si.ProductInfo.ProductOwnerUID = info.ProductOwnerUID
+	si.ProductInfo.ProductName = info.ProductName
+	si.ProductInfo.ProductUID = info.ProductUID
+	si.ProductInfo.Version = Version{
 		Version:         v.Version.Version,
 		VersionStrategy: v.Version.VersionStrategy,
 		CommitHash:      v.Version.CommitHash,
@@ -126,7 +133,7 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 }
 
 type SiteInfo struct {
-	Version        Version        `json:"version"`
+	ProductInfo    ProductInfo    `json:"product_info"`
 	KubernetesInfo KubernetesInfo `json:"kubernetes_info"`
 }
 
@@ -140,6 +147,18 @@ type Version struct {
 	GoVersion       string `json:"goVersion,omitempty"`
 	Compiler        string `json:"compiler,omitempty"`
 	Platform        string `json:"platform,omitempty"`
+}
+
+type ProductInfo struct {
+	Version   Version `json:"version"`
+	LicenseID string  `json:"license_id,omitempty"`
+
+	ProductOwnerName string `json:"product_owner_name,omitempty"`
+	ProductOwnerUID  string `json:"product_owner_uid,omitempty"`
+
+	// This has been renamed to Features
+	ProductName string `json:"product_name,omitempty"`
+	ProductUID  string `json:"product_uid,omitempty"`
 }
 
 type KubernetesInfo struct {
@@ -177,4 +196,23 @@ type NodeStatus struct {
 	// Defaults to Capacity.
 	// +optional
 	Allocatable core.ResourceList `json:"allocatable,omitempty"`
+}
+
+
+var _ cache.ResourceEventHandler = &ResourceEventPublisher{}
+
+type ResourceEventPublisher struct {
+
+}
+
+func (p ResourceEventPublisher) OnAdd(obj interface{}) {
+
+}
+
+func (p ResourceEventPublisher) OnUpdate(oldObj, newObj interface{}) {
+
+}
+
+func (p ResourceEventPublisher) OnDelete(obj interface{}) {
+
 }
