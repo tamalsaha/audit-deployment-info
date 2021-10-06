@@ -47,8 +47,8 @@ func main() {
 	stopCh := genericapiserver.SetupSignalHandler()
 	factory.Start(stopCh)
 	// Wait for all involved caches to be synced, before processing items from the queue is started
-	for t, v := range factory.WaitForCacheSync(stopCh) {
-		if !v {
+	for t, ok := range factory.WaitForCacheSync(stopCh) {
+		if !ok {
 			klog.Fatalf("%v timed out waiting for caches to sync", t)
 			return
 		}
