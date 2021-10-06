@@ -1,38 +1,32 @@
 package main
 
 import (
-	"context"
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
 	"log"
 	"math/big"
 	"net"
 	"net/url"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/labels"
+	v1 "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 
 	v "gomodules.xyz/x/version"
 	core "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/version"
-	"k8s.io/client-go/dynamic"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"kmodules.xyz/client-go/tools/exec"
+	meta_util "kmodules.xyz/client-go/meta"
 	"kmodules.xyz/client-go/tools/clusterid"
 	"kmodules.xyz/resource-metrics/api"
-	meta_util "kmodules.xyz/client-go/meta"
-	genericapiserver "k8s.io/apiserver/pkg/server"
 )
 
 func main() {
@@ -87,8 +81,8 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 	}
 
 	var err error
-	si.KubernetesInfo.ClusterName=  clusterid.ClusterName()
-	si.KubernetesInfo.ClusterUID, err =  clusterid.ClusterUID(kc.CoreV1().Namespaces())
+	si.KubernetesInfo.ClusterName = clusterid.ClusterName()
+	si.KubernetesInfo.ClusterUID, err = clusterid.ClusterUID(kc.CoreV1().Namespaces())
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +127,7 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 }
 
 type SiteInfo struct {
-	Version        Version         `json:"version"`
+	Version        Version        `json:"version"`
 	KubernetesInfo KubernetesInfo `json:"kubernetes_info"`
 }
 
@@ -174,7 +168,7 @@ type Certificate struct {
 }
 
 type NodeStatus struct {
-	Count     int                       `json:"count,omitempty"`
+	Count int `json:"count,omitempty"`
 
 	// Capacity represents the total resources of a node.
 	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#capacity
