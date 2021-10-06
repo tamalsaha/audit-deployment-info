@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"log"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/util/homedir"
 	"kmodules.xyz/client-go/tools/exec"
 )
@@ -25,6 +27,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not get Kubernetes config: %s", err)
 	}
+
+	kc := kubernetes.NewForConfigOrDie(config)
+
+	factory := informers.NewSharedInformerFactory(kc, 0)
+	nodeInformer := factory.Core().V1().Nodes()
+	nodeLister := factory.Kubedb().V1alpha2().Postgreses().Lister()
+	nodeInformer.AddEventHandler(nil) // c.Auditor.ForGVK(api.SchemeGroupVersion.WithKind(api.ResourceKindPostgres)))
+
 
 	dc2 := dynamic.NewForConfigOrDie(config)
 
