@@ -4,7 +4,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
-	"k8s.io/client-go/tools/cache"
 	"log"
 	"math/big"
 	"net"
@@ -12,6 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"k8s.io/client-go/tools/cache"
+
+	"go.bytebuilders.dev/license-verifier/info"
 	v "gomodules.xyz/x/version"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -26,7 +28,6 @@ import (
 	"k8s.io/klog/v2"
 	meta_util "kmodules.xyz/client-go/meta"
 	"kmodules.xyz/client-go/tools/clusterid"
-	"go.bytebuilders.dev/license-verifier/info"
 	"kmodules.xyz/resource-metrics/api"
 )
 
@@ -198,11 +199,9 @@ type NodeStatus struct {
 	Allocatable core.ResourceList `json:"allocatable,omitempty"`
 }
 
-
 var _ cache.ResourceEventHandler = &ResourceEventPublisher{}
 
 type ResourceEventPublisher struct {
-
 }
 
 func (p ResourceEventPublisher) OnAdd(obj interface{}) {
