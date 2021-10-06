@@ -11,19 +11,18 @@ import (
 	"path/filepath"
 	"time"
 
-	"k8s.io/apimachinery/pkg/labels"
-	v1 "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
-
 	v "gomodules.xyz/x/version"
 	core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/version"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+	"k8s.io/klog/v2"
 	meta_util "kmodules.xyz/client-go/meta"
 	"kmodules.xyz/client-go/tools/clusterid"
 	"kmodules.xyz/resource-metrics/api"
@@ -153,7 +152,6 @@ type KubernetesInfo struct {
 }
 
 // https://github.com/kmodules/client-go/blob/kubernetes-1.16.3/tools/analytics/analytics.go#L66
-
 type Certificate struct {
 	Version        int        `json:"version,omitempty"`
 	SerialNumber   *big.Int   `json:"serial_number,omitempty"`
