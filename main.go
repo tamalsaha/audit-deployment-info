@@ -2,23 +2,13 @@ package main
 
 import (
 	"context"
-	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/asn1"
+	"encoding/json"
 	"fmt"
-	v "gomodules.xyz/x/version"
-	core "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/version"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
-	"kmodules.xyz/client-go/tools/exec"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"log"
 	"math/big"
 	"net"
@@ -26,6 +16,23 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	v "gomodules.xyz/x/version"
+	core "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
+	"kmodules.xyz/client-go/tools/exec"
+	"kmodules.xyz/client-go/tools/clusterid"
+	"kmodules.xyz/resource-metrics/api"
+	meta_util "kmodules.xyz/client-go/meta"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 )
 
 func main() {
@@ -44,62 +51,28 @@ func main() {
 	nodeLister := factory.Core().V1().Nodes().Lister()
 	nodeInformer.AddEventHandlerWithResyncPeriod(nil, 0) // c.Auditor.ForGVK(api.SchemeGroupVersion.WithKind(api.ResourceKindPostgres)))
 
-	dc2 := dynamic.NewForConfigOrDie(config)
-
-	gvrNode := schema.GroupVersionResource{
-		Group:    "",
-		Version:  "v1",
-		Resource: "nodes",
-	}
-	nodes, err := dc2.Resource(gvrNode).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
-	for _, obj := range nodes.Items {
-		fmt.Printf("%+v\n", obj.GetName())
-	}
-	nodes, err = dc2.Resource(gvrNode).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
-	for _, obj := range nodes.Items {
-		fmt.Printf("%+v\n", obj.GetName())
+	stopCh := genericapiserver.SetupSignalHandler()
+	factory.Start(stopCh)
+	// Wait for all involved caches to be synced, before processing items from the queue is started
+	for t, v := range factory.WaitForCacheSync(stopCh) {
+		if !v {
+			klog.Fatalf("%v timed out waiting for caches to sync", t)
+			return
+		}
 	}
 
-	pod := types.NamespacedName{
-		Namespace: "demo",
-		Name:      "voyager-test-ingress-754d884cf-dmwrd",
-	}
-	out, err := exec.Exec(config, pod, exec.Container("haproxy"), exec.Command("ps"))
+	si, err := GenerateSiteInfo(config, kc, nodeLister)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(out)
-
-	out22, err := exec.Exec(
-		config,
-		pod,
-		exec.Container("haproxy"),
-		exec.Command("cat", "/shared/haproxy.pid"))
+	data, err := json.MarshalIndent(si, "", "  ")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(out22)
-	out2, err := exec.Exec(config, pod, exec.Container("haproxy"), exec.Command("/bin/kill", "-SIGHUP", strings.TrimSpace(out22)))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(out2)
-
-	time.Sleep(2 * time.Second)
-	out3, err := exec.Exec(config, pod, exec.Container("haproxy"), exec.Command("ps"))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(out3)
+	fmt.Println(string(data))
 }
 
-func GenerateSiteInfo() SiteInfo {
+func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.NodeLister) (*SiteInfo, error) {
 	var si SiteInfo
 	si.Version = Version{
 		Version:         v.Version.Version,
@@ -112,11 +85,56 @@ func GenerateSiteInfo() SiteInfo {
 		Compiler:        v.Version.Compiler,
 		Platform:        v.Version.Platform,
 	}
-	return si
+
+	var err error
+	si.KubernetesInfo.ClusterName=  clusterid.ClusterName()
+	si.KubernetesInfo.ClusterUID, err =  clusterid.ClusterUID(kc.CoreV1().Namespaces())
+	if err != nil {
+		return nil, err
+	}
+	si.KubernetesInfo.Version, err = kc.Discovery().ServerVersion()
+	if err != nil {
+		return nil, err
+	}
+	apiserverCert, err := meta_util.APIServerCertificate(cfg)
+	if err != nil {
+		return nil, err
+	} else {
+		si.KubernetesInfo.Certificate = &Certificate{
+			Version:        apiserverCert.Version,
+			SerialNumber:   apiserverCert.SerialNumber,
+			Issuer:         apiserverCert.Issuer,
+			Subject:        apiserverCert.Subject,
+			NotBefore:      apiserverCert.NotBefore,
+			NotAfter:       apiserverCert.NotAfter,
+			DNSNames:       apiserverCert.DNSNames,
+			EmailAddresses: apiserverCert.EmailAddresses,
+			IPAddresses:    apiserverCert.IPAddresses,
+			URIs:           apiserverCert.URIs,
+		}
+	}
+
+	nodes, err := nodeLister.List(labels.Everything())
+	if err != nil {
+		return nil, err
+	}
+	si.KubernetesInfo.NodeStatus.Count = len(nodes)
+
+	var capacity core.ResourceList
+	var allocatable core.ResourceList
+	for _, node := range nodes {
+		capacity = api.AddResourceList(capacity, node.Status.Capacity)
+		allocatable = api.AddResourceList(allocatable, node.Status.Allocatable)
+	}
+	si.KubernetesInfo.NodeStatus.Capacity = capacity
+	si.KubernetesInfo.NodeStatus.Allocatable = allocatable
+
+	return &si, nil
 }
 
 type SiteInfo struct {
-	Version Version `json:"version"`
+	Version        Version         `json:"version"`
+	KubernetesInfo KubernetesInfo `json:"kubernetes_info"`
 }
 
 type Version struct {
@@ -133,28 +151,38 @@ type Version struct {
 
 type KubernetesInfo struct {
 	// https://github.com/kmodules/client-go/blob/master/tools/clusterid/lib.go
-	ClusterName   string                    `json:"cluster_name,omitempty"`
-	ClusterUID    string                    `json:"cluster_uid,omitempty"`
-	Version       *version.Info             `json:"version,omitempty"`
-	NodeCount     int                       `json:"node_count,omitempty"`
-	NodeResources core.ResourceRequirements `json:"node_resources"`
-	Certificate   *Certificate              `json:"certificate,omitempty"`
+	ClusterName string        `json:"cluster_name,omitempty"`
+	ClusterUID  string        `json:"cluster_uid,omitempty"`
+	Version     *version.Info `json:"version,omitempty"`
+	NodeStatus  NodeStatus    `json:"node_status"`
+	Certificate *Certificate  `json:"certificate,omitempty"`
 }
 
 // https://github.com/kmodules/client-go/blob/kubernetes-1.16.3/tools/analytics/analytics.go#L66
 
 type Certificate struct {
-	Version             int       `json:"version,omitempty"`
-	SerialNumber        *big.Int  `json:"serial_number,omitempty"`
-	Issuer              pkix.Name `json:"issuer"`
-	Subject             pkix.Name `json:"subject"`
-	NotBefore, NotAfter time.Time // Validity bounds.
-
-	// Subject Alternate Name values. (Note that these values may not be valid
-	// if invalid values were contained within a parsed certificate. For
-	// example, an element of DNSNames may not be a valid DNS domain name.)
+	Version        int        `json:"version,omitempty"`
+	SerialNumber   *big.Int   `json:"serial_number,omitempty"`
+	Issuer         pkix.Name  `json:"issuer"`
+	Subject        pkix.Name  `json:"subject"`
+	NotBefore      time.Time  `json:"not_before"`
+	NotAfter       time.Time  `json:"not_after"`
 	DNSNames       []string   `json:"dns_names,omitempty"`
 	EmailAddresses []string   `json:"email_addresses,omitempty"`
 	IPAddresses    []net.IP   `json:"ip_addresses,omitempty"`
 	URIs           []*url.URL `json:"ur_is,omitempty"`
+}
+
+type NodeStatus struct {
+	Count     int                       `json:"count,omitempty"`
+
+	// Capacity represents the total resources of a node.
+	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#capacity
+	// +optional
+	Capacity core.ResourceList `json:"capacity,omitempty"`
+
+	// Allocatable represents the resources of a node that are available for scheduling.
+	// Defaults to Capacity.
+	// +optional
+	Allocatable core.ResourceList `json:"allocatable,omitempty"`
 }
