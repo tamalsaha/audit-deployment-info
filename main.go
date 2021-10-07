@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"path/filepath"
+	"strings"
 
 	"go.bytebuilders.dev/license-verifier/info"
 	v "gomodules.xyz/x/version"
@@ -31,6 +32,7 @@ import (
 func main() {
 	masterURL := ""
 	kubeconfigPath := filepath.Join(homedir.HomeDir(), ".kube", "config")
+	kubeconfigPath = "/home/tamal/Downloads/mysql-test-kubeconfig.yaml"
 
 	config, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfigPath)
 	if err != nil {
@@ -126,8 +128,9 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 			if host == "kubernetes" ||
 				host == "kubernetes.default" ||
 				host == "kubernetes.default.svc" ||
-				host == "kubernetes.default.svc.cluster.local" ||
-				host == "localhost" {
+				strings.HasSuffix(host, ".svc.cluster.local") ||
+				host == "localhost"  ||
+				!strings.ContainsRune(host, '.') {
 				dnsNames.Delete(host)
 			}
 		}
