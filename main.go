@@ -1,16 +1,14 @@
 package main
 
 import (
-	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/big"
 	"net"
-	"net/url"
 	"path/filepath"
-	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 
 	"go.bytebuilders.dev/license-verifier/info"
@@ -97,22 +95,57 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 	if err != nil {
 		return nil, err
 	}
-	apiserverCert, err := meta_util.APIServerCertificate(cfg)
+	cert, err := meta_util.APIServerCertificate(cfg)
 	if err != nil {
 		return nil, err
 	} else {
 		si.KubernetesInfo.Certificate = &Certificate{
-			Version:        apiserverCert.Version,
-			SerialNumber:   apiserverCert.SerialNumber,
-			Issuer:         apiserverCert.Issuer,
-			Subject:        apiserverCert.Subject,
-			NotBefore:      apiserverCert.NotBefore,
-			NotAfter:       apiserverCert.NotAfter,
-			DNSNames:       apiserverCert.DNSNames,
-			EmailAddresses: apiserverCert.EmailAddresses,
-			IPAddresses:    apiserverCert.IPAddresses,
-			URIs:           apiserverCert.URIs,
+			SerialNumber: cert.SerialNumber.String(),
+			//Issuer:         cert.Issuer,
+			//Subject:        cert.Subject,
+			NotBefore: metav1.NewTime(cert.NotBefore),
+			NotAfter:  metav1.NewTime(cert.NotAfter),
+			// DNSNames:       cert.DNSNames,
+			EmailAddresses: cert.EmailAddresses,
+			// IPAddresses:    cert.IPAddresses,
+			// URIs:           cert.URIs,
 		}
+
+		dnsNames := sets.NewString(cert.DNSNames...)
+		ips := sets.NewString()
+		if len(cert.Subject.CommonName) > 0 {
+			if ip := net.ParseIP(cert.Subject.CommonName); ip != nil {
+				if !skipIP(ip) {
+					ips.Insert(ip.String())
+				}
+			} else {
+				dnsNames.Insert(cert.Subject.CommonName)
+			}
+		}
+
+		for _, host := range dnsNames.UnsortedList() {
+			if host == "kubernetes" ||
+				host == "kubernetes.default" ||
+				host == "kubernetes.default.svc" ||
+				host == "kubernetes.default.svc.cluster.local" ||
+				host == "localhost" {
+				dnsNames.Delete(host)
+			}
+		}
+		si.KubernetesInfo.Certificate.DNSNames = dnsNames.List()
+
+		for _, ip := range cert.IPAddresses {
+			if !skipIP(ip) {
+				ips.Insert(ip.String())
+			}
+		}
+		si.KubernetesInfo.Certificate.IPAddresses = ips.List()
+
+		uris := make([]string, 0, len(cert.URIs))
+		for _, u := range cert.URIs {
+			uris = append(uris, u.String())
+		}
+		si.KubernetesInfo.Certificate.URIs = uris
 	}
 
 	nodes, err := nodeLister.List(labels.Everything())
@@ -173,16 +206,15 @@ type KubernetesInfo struct {
 
 // https://github.com/kmodules/client-go/blob/kubernetes-1.16.3/tools/analytics/analytics.go#L66
 type Certificate struct {
-	Version        int        `json:"version,omitempty"`
-	SerialNumber   *big.Int   `json:"serial_number,omitempty"`
-	Issuer         pkix.Name  `json:"issuer"`
-	Subject        pkix.Name  `json:"subject"`
-	NotBefore      time.Time  `json:"not_before"`
-	NotAfter       time.Time  `json:"not_after"`
-	DNSNames       []string   `json:"dns_names,omitempty"`
-	EmailAddresses []string   `json:"email_addresses,omitempty"`
-	IPAddresses    []net.IP   `json:"ip_addresses,omitempty"`
-	URIs           []*url.URL `json:"ur_is,omitempty"`
+	SerialNumber string `json:"serial_number,omitempty"`
+	//Issuer         pkix.Name  `json:"issuer"`
+	//Subject        pkix.Name  `json:"subject"`
+	NotBefore      metav1.Time `json:"not_before"`
+	NotAfter       metav1.Time `json:"not_after"`
+	DNSNames       []string    `json:"dns_names,omitempty"`
+	EmailAddresses []string    `json:"email_addresses,omitempty"`
+	IPAddresses    []string    `json:"ip_addresses,omitempty"`
+	URIs           []string    `json:"ur_is,omitempty"`
 }
 
 type NodeStatus struct {
@@ -197,6 +229,15 @@ type NodeStatus struct {
 	// Defaults to Capacity.
 	// +optional
 	Allocatable core.ResourceList `json:"allocatable,omitempty"`
+}
+
+func skipIP(ip net.IP) bool {
+	return ip.IsLoopback() ||
+		ip.IsMulticast() ||
+		ip.IsGlobalUnicast() ||
+		ip.IsInterfaceLocalMulticast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsLinkLocalUnicast()
 }
 
 var _ cache.ResourceEventHandler = &ResourceEventPublisher{}
