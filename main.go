@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,7 +19,6 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -56,7 +56,11 @@ func main() {
 		}
 	}
 
-	si, err := GenerateSiteInfo(config, kc, nodeLister)
+	nodes, err := nodeLister.List(labels.Everything())
+	if err != nil {
+		panic(err)
+	}
+	si, err := GenerateSiteInfo(config, kc, nodes, "")
 	if err != nil {
 		panic(err)
 	}
@@ -67,23 +71,27 @@ func main() {
 	fmt.Println(string(data))
 }
 
-func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.NodeLister) (*SiteInfo, error) {
+func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodes []*core.Node, licenseID string) (*SiteInfo, error) {
 	var si SiteInfo
-	si.Product.LicenseID = "" // fix this
-	si.Product.ProductOwnerName = info.ProductOwnerName
-	si.Product.ProductOwnerUID = info.ProductOwnerUID
-	si.Product.ProductName = info.ProductName
-	si.Product.ProductUID = info.ProductUID
-	si.Product.Version = Version{
-		Version:         v.Version.Version,
-		VersionStrategy: v.Version.VersionStrategy,
-		CommitHash:      v.Version.CommitHash,
-		GitBranch:       v.Version.GitBranch,
-		GitTag:          v.Version.GitTag,
-		CommitTimestamp: v.Version.CommitTimestamp,
-		GoVersion:       v.Version.GoVersion,
-		Compiler:        v.Version.Compiler,
-		Platform:        v.Version.Platform,
+
+	if info.ProductName != "" || v.Version.Version != "" || licenseID != "" {
+		si.Product = &ProductInfo{}
+		si.Product.LicenseID = licenseID
+		si.Product.ProductOwnerName = info.ProductOwnerName
+		si.Product.ProductOwnerUID = info.ProductOwnerUID
+		si.Product.ProductName = info.ProductName
+		si.Product.ProductUID = info.ProductUID
+		si.Product.Version = Version{
+			Version:         v.Version.Version,
+			VersionStrategy: v.Version.VersionStrategy,
+			CommitHash:      v.Version.CommitHash,
+			GitBranch:       v.Version.GitBranch,
+			GitTag:          v.Version.GitTag,
+			CommitTimestamp: v.Version.CommitTimestamp,
+			GoVersion:       v.Version.GoVersion,
+			Compiler:        v.Version.Compiler,
+			Platform:        v.Version.Platform,
+		}
 	}
 
 	var err error
@@ -101,9 +109,6 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 		return nil, err
 	} else {
 		si.Kubernetes.ControlPlane = &ControlPlaneInfo{
-			//SerialNumber: cert.SerialNumber.String(),
-			//Issuer:         cert.Issuer,
-			//Subject:        cert.Subject,
 			NotBefore: metav1.NewTime(cert.NotBefore),
 			NotAfter:  metav1.NewTime(cert.NotAfter),
 			// DNSNames:       cert.DNSNames,
@@ -150,9 +155,15 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 		si.Kubernetes.ControlPlane.URIs = uris
 	}
 
-	nodes, err := nodeLister.List(labels.Everything())
-	if err != nil {
-		return nil, err
+	if len(nodes) == 0 {
+		result, err := kc.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return nil, err
+		}
+		nodes = make([]*core.Node, len(result.Items))
+		for i := range result.Items {
+			nodes[i] = &result.Items[i]
+		}
 	}
 	si.Kubernetes.NodeStats.Count = len(nodes)
 
@@ -169,7 +180,7 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 }
 
 type SiteInfo struct {
-	Product    ProductInfo    `json:"product"`
+	Product    *ProductInfo   `json:"product,omitempty"`
 	Kubernetes KubernetesInfo `json:"kubernetes"`
 }
 

@@ -251,12 +251,8 @@ gomodules.xyz/jsonpatch/v2
 # gomodules.xyz/pointer v0.1.0
 ## explicit; go 1.15
 gomodules.xyz/pointer
-# gomodules.xyz/sets v0.1.0
-## explicit; go 1.14
-gomodules.xyz/sets
 # gomodules.xyz/x v0.0.7
 ## explicit; go 1.12
-gomodules.xyz/x/net
 gomodules.xyz/x/version
 # google.golang.org/appengine v1.6.7
 ## explicit; go 1.11
