@@ -6,23 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="1c3e83e5-fd2d-4e8e-ab61-bdbe2724c62e" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/LICENSE" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/byte.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/doc.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/empty.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/int.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/int32.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/int64.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/string.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/uint.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/uint32.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/sets/uint64.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/gomodules.xyz/x/net/ips.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/vendor/modules.txt" beforeDir="false" afterPath="$PROJECT_DIR$/vendor/modules.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,6 +28,11 @@
   <component name="GoLibraries">
     <option name="indexEntireGoPath" value="false" />
   </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/vendor/kmodules.xyz/client-go/meta/incluster.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/main.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/vendor/k8s.io/client-go/rest/request.go" root0="SKIP_INSPECTION" />
+  </component>
   <component name="ProjectId" id="1z9EoPGAkalQC3rkHsVjg3KrptG" />
   <component name="ProjectViewState">
     <option name="autoscrollFromSource" value="true" />
@@ -58,7 +47,7 @@
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.modules.go.list.on.any.changes.was.set" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
-    <property name="last_opened_file_path" value="$USER_HOME$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../../kmodules.xyz/custom-resources" />
   </component>
   <component name="RunManager">
     <configuration name="go build github.com/tamalsaha/audit-deployment-info" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
@@ -91,7 +80,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/main.go</url>
-          <line>178</line>
+          <line>179</line>
           <option name="timeStamp" value="3" />
         </line-breakpoint>
       </breakpoints>

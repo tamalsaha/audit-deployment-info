@@ -104,6 +104,7 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodes []*core.N
 	if err != nil {
 		return nil, err
 	}
+
 	cert, err := meta_util.APIServerCertificate(cfg)
 	if err != nil {
 		return nil, err
