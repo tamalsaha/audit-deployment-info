@@ -69,12 +69,12 @@ func main() {
 
 func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.NodeLister) (*SiteInfo, error) {
 	var si SiteInfo
-	si.ProductInfo.LicenseID = "" // fix this
-	si.ProductInfo.ProductOwnerName = info.ProductOwnerName
-	si.ProductInfo.ProductOwnerUID = info.ProductOwnerUID
-	si.ProductInfo.ProductName = info.ProductName
-	si.ProductInfo.ProductUID = info.ProductUID
-	si.ProductInfo.Version = Version{
+	si.Product.LicenseID = "" // fix this
+	si.Product.ProductOwnerName = info.ProductOwnerName
+	si.Product.ProductOwnerUID = info.ProductOwnerUID
+	si.Product.ProductName = info.ProductName
+	si.Product.ProductUID = info.ProductUID
+	si.Product.Version = Version{
 		Version:         v.Version.Version,
 		VersionStrategy: v.Version.VersionStrategy,
 		CommitHash:      v.Version.CommitHash,
@@ -87,12 +87,12 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 	}
 
 	var err error
-	si.KubernetesInfo.ClusterName = clusterid.ClusterName()
-	si.KubernetesInfo.ClusterUID, err = clusterid.ClusterUID(kc.CoreV1().Namespaces())
+	si.Kubernetes.ClusterName = clusterid.ClusterName()
+	si.Kubernetes.ClusterUID, err = clusterid.ClusterUID(kc.CoreV1().Namespaces())
 	if err != nil {
 		return nil, err
 	}
-	si.KubernetesInfo.Version, err = kc.Discovery().ServerVersion()
+	si.Kubernetes.Version, err = kc.Discovery().ServerVersion()
 	if err != nil {
 		return nil, err
 	}
@@ -100,8 +100,8 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 	if err != nil {
 		return nil, err
 	} else {
-		si.KubernetesInfo.Certificate = &Certificate{
-			SerialNumber: cert.SerialNumber.String(),
+		si.Kubernetes.ControlPlane = &ControlPlaneInfo{
+			//SerialNumber: cert.SerialNumber.String(),
 			//Issuer:         cert.Issuer,
 			//Subject:        cert.Subject,
 			NotBefore: metav1.NewTime(cert.NotBefore),
@@ -129,32 +129,32 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 				host == "kubernetes.default" ||
 				host == "kubernetes.default.svc" ||
 				strings.HasSuffix(host, ".svc.cluster.local") ||
-				host == "localhost"  ||
+				host == "localhost" ||
 				!strings.ContainsRune(host, '.') {
 				dnsNames.Delete(host)
 			}
 		}
-		si.KubernetesInfo.Certificate.DNSNames = dnsNames.List()
+		si.Kubernetes.ControlPlane.DNSNames = dnsNames.List()
 
 		for _, ip := range cert.IPAddresses {
 			if !skipIP(ip) {
 				ips.Insert(ip.String())
 			}
 		}
-		si.KubernetesInfo.Certificate.IPAddresses = ips.List()
+		si.Kubernetes.ControlPlane.IPAddresses = ips.List()
 
 		uris := make([]string, 0, len(cert.URIs))
 		for _, u := range cert.URIs {
 			uris = append(uris, u.String())
 		}
-		si.KubernetesInfo.Certificate.URIs = uris
+		si.Kubernetes.ControlPlane.URIs = uris
 	}
 
 	nodes, err := nodeLister.List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
-	si.KubernetesInfo.NodeStatus.Count = len(nodes)
+	si.Kubernetes.NodeStats.Count = len(nodes)
 
 	var capacity core.ResourceList
 	var allocatable core.ResourceList
@@ -162,15 +162,15 @@ func GenerateSiteInfo(cfg *rest.Config, kc kubernetes.Interface, nodeLister v1.N
 		capacity = api.AddResourceList(capacity, node.Status.Capacity)
 		allocatable = api.AddResourceList(allocatable, node.Status.Allocatable)
 	}
-	si.KubernetesInfo.NodeStatus.Capacity = capacity
-	si.KubernetesInfo.NodeStatus.Allocatable = allocatable
+	si.Kubernetes.NodeStats.Capacity = capacity
+	si.Kubernetes.NodeStats.Allocatable = allocatable
 
 	return &si, nil
 }
 
 type SiteInfo struct {
-	ProductInfo    ProductInfo    `json:"product_info"`
-	KubernetesInfo KubernetesInfo `json:"kubernetes_info"`
+	Product    ProductInfo    `json:"product"`
+	Kubernetes KubernetesInfo `json:"kubernetes"`
 }
 
 type Version struct {
@@ -187,39 +187,36 @@ type Version struct {
 
 type ProductInfo struct {
 	Version   Version `json:"version"`
-	LicenseID string  `json:"license_id,omitempty"`
+	LicenseID string  `json:"licenseID,omitempty"`
 
-	ProductOwnerName string `json:"product_owner_name,omitempty"`
-	ProductOwnerUID  string `json:"product_owner_uid,omitempty"`
+	ProductOwnerName string `json:"productOwnerName,omitempty"`
+	ProductOwnerUID  string `json:"productOwnerUID,omitempty"`
 
 	// This has been renamed to Features
-	ProductName string `json:"product_name,omitempty"`
-	ProductUID  string `json:"product_uid,omitempty"`
+	ProductName string `json:"productName,omitempty"`
+	ProductUID  string `json:"productUID,omitempty"`
 }
 
 type KubernetesInfo struct {
 	// https://github.com/kmodules/client-go/blob/master/tools/clusterid/lib.go
-	ClusterName string        `json:"cluster_name,omitempty"`
-	ClusterUID  string        `json:"cluster_uid,omitempty"`
-	Version     *version.Info `json:"version,omitempty"`
-	NodeStatus  NodeStatus    `json:"node_status"`
-	Certificate *Certificate  `json:"certificate,omitempty"`
+	ClusterName  string            `json:"clusterName,omitempty"`
+	ClusterUID   string            `json:"clusterUID,omitempty"`
+	Version      *version.Info     `json:"version,omitempty"`
+	ControlPlane *ControlPlaneInfo `json:"controlPlane,omitempty"`
+	NodeStats    NodeStats         `json:"nodeStats"`
 }
 
 // https://github.com/kmodules/client-go/blob/kubernetes-1.16.3/tools/analytics/analytics.go#L66
-type Certificate struct {
-	SerialNumber string `json:"serial_number,omitempty"`
-	//Issuer         pkix.Name  `json:"issuer"`
-	//Subject        pkix.Name  `json:"subject"`
-	NotBefore      metav1.Time `json:"not_before"`
-	NotAfter       metav1.Time `json:"not_after"`
-	DNSNames       []string    `json:"dns_names,omitempty"`
-	EmailAddresses []string    `json:"email_addresses,omitempty"`
-	IPAddresses    []string    `json:"ip_addresses,omitempty"`
-	URIs           []string    `json:"ur_is,omitempty"`
+type ControlPlaneInfo struct {
+	DNSNames       []string    `json:"dnsNames,omitempty"`
+	EmailAddresses []string    `json:"emailAddresses,omitempty"`
+	IPAddresses    []string    `json:"ipAddresses,omitempty"`
+	URIs           []string    `json:"uris,omitempty"`
+	NotBefore      metav1.Time `json:"notBefore"`
+	NotAfter       metav1.Time `json:"notAfter"`
 }
 
-type NodeStatus struct {
+type NodeStats struct {
 	Count int `json:"count,omitempty"`
 
 	// Capacity represents the total resources of a node.
